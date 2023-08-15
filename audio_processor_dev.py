@@ -18,6 +18,8 @@ class AudioProcessor:
         self.current_end_mode = self.end_modes[0]
         self.current_mode = "start"
         self.points = [None, None]
+        self.duration_ms = 2000
+        self.margin_sec = 0.5
 
     # Public methods
     def get_audio_length(self):
@@ -37,11 +39,16 @@ class AudioProcessor:
         ax.set_xlabel("Time (seconds)")
         ax.set_ylabel("Amplitude")
 
-        self.start_button = self._create_button([0.1, 0.05, 0.12, 0.04], f"Start ({self.current_start_mode})", "yellow", self._select_start)
-        self.end_button = self._create_button([0.23, 0.05, 0.12, 0.04], f"End ({self.current_end_mode})", "lightgray", self._select_end)
+        self.start_button = self._create_button([0.13, 0.05, 0.12, 0.04], f"Start ({self.current_start_mode})",
+                                                "yellow", self._select_start)
+        self.end_button = self._create_button([0.26, 0.05, 0.12, 0.04], f"End ({self.current_end_mode})",
+                                              "lightgray", self._select_end)
         self.save_button = self._create_button([0.8, 0.05, 0.1, 0.04], "Save Audio", "yellow", self._save_audio)
 
-        cid = fig.canvas.mpl_connect("button_press_event", self._onclick)
+        if self.current_start_mode == "impulse":
+            self.span = SpanSelector(self.ax, self._onselect, "horizontal", useblit=True)
+
+        _ = fig.canvas.mpl_connect("button_press_event", self._onclick)
         plt.show()
 
     # Private helper methods
@@ -57,14 +64,17 @@ class AudioProcessor:
             self.current_playback.stop()
 
     def _get_audio_segment_to_play(self, point):
+        point_in_ms = int(point * 1000)
         if self.current_mode == "start":
-            return self.audio[int(point * 1000) : min(len(self.audio), int(point * 1000) + 2000)]
+            return self.audio[point_in_ms : min(len(self.audio), point_in_ms + self.duration_ms)]
         elif self.current_mode == "end":
-            return self.audio[max(0, int(point * 1000) - 2000) : int(point * 1000)]
+            return self.audio[max(0, point_in_ms - self.duration_ms) : point_in_ms]
 
     def _onclick(self, event):
         if event.inaxes in [self.start_button.ax, self.end_button.ax, self.save_button.ax] or \
-           (self.current_mode == "end" and self.current_end_mode == "20sec"):
+           (self.current_mode == "end" and self.current_end_mode == "20sec") or \
+           (self.current_mode == "start" and self.current_start_mode == "impulse") or \
+           (event.xdata is None or event.xdata < 0 or event.xdata > self.audio.duration_seconds):
             return
 
         idx = 0 if self.current_mode == "start" else 1
@@ -79,8 +89,12 @@ class AudioProcessor:
         fs = self.audio.frame_rate
         start_idx, end_idx = int(start * fs), int(end * fs)
         max_idx = start_idx + np.argmax(np.abs(samples[start_idx:end_idx]))
-        self.points[0] = max_idx / fs
-        print(f"Start point (Impulse): {self.points[0]}")
+        self.points[0] = max_idx / fs + self.margin_sec
+
+        offset = self.duration_ms / 1000 / 2 + self.margin_sec
+        segment_to_play = self._get_audio_segment_to_play(self.points[0] - offset)
+        self.current_playback = self._play_audio_segment(segment_to_play)
+        print(f"Start point: {self.points[0]}, End point: {self.points[1]}")
         self._update_button_colors()
 
     def _select_start(self, event):
@@ -107,6 +121,10 @@ class AudioProcessor:
             self.end_button.label.set_text(f"End ({self.current_end_mode})")
         else:
             self.current_mode = "end"
+
+        # Disable span selector if exists
+        if hasattr(self, "span"):
+            self.span.set_active(False)
 
         self._update_button_colors()
         self._stop_audio_playback()
