@@ -1,7 +1,7 @@
 import os
 from video_processor import process_video
 # from audio_processor import process_audio
-from audio_processor_dev import process_audio
+from audio_processor_dev import AudioProcessor
 
 
 def get_video_and_audio_paths(input_dir):
@@ -33,7 +33,9 @@ def main():
 
     input_video_path, input_audio_path = get_video_and_audio_paths(input_dir)
     # process_video(input_video_path, output_dir)
-    process_audio(input_audio_path, output_dir)
+    processor = AudioProcessor(input_audio_path, output_dir)
+    processor.process()
+    audio_length = processor.get_audio_length()
 
 
 if __name__ == "__main__":

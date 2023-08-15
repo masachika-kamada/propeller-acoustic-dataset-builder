@@ -1,83 +1,97 @@
 import os
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 from pydub import AudioSegment
 from matplotlib.widgets import Button
 import simpleaudio as sa
 
-def extract_audio_from_wav(file_path):
-    return AudioSegment.from_wav(file_path)
 
-def play_audio_segment(audio_segment):
-    samples = np.array(audio_segment.get_array_of_samples())
-    return sa.play_buffer(samples, 1, 2, audio_segment.frame_rate)
+class AudioProcessor:
+    def __init__(self, input_audio_path, output_dir):
+        self.input_audio_path = input_audio_path
+        self.output_dir = output_dir
+        self.audio = self._extract_audio_from_wav().split_to_mono()[0]
+        self.current_playback = None
+        self.selecting_start = True
+        self.points = [None, None]
 
-def stop_audio_playback(playback_obj):
-    if playback_obj:
-        playback_obj.stop()
+    # Public methods
+    def get_audio_length(self):
+        if self.points[0] is not None and self.points[1] is not None:
+            return self.points[1] - self.points[0]
+        return None
 
-def process_audio(input_audio_path, output_dir):
-    final_audio_path = os.path.join(output_dir, "dst.wav")
-    audio = extract_audio_from_wav(input_audio_path)
-    audio = audio.split_to_mono()[0]
-    samples = np.array(audio.get_array_of_samples())
-    fs = audio.frame_rate
+    def process(self):
+        samples = np.array(self.audio.get_array_of_samples())
+        fs = self.audio.frame_rate
 
-    fig, ax = plt.subplots(figsize=(14, 6))
-    plt.subplots_adjust(bottom=0.2)
-    ax.plot(np.linspace(0, len(samples) / fs, num=len(samples)), samples)
-    ax.set_title("Select start and end points")
-    ax.set_xlabel("Time (seconds)")
-    ax.set_ylabel("Amplitude")
+        fig, ax = plt.subplots(figsize=(14, 6))
+        plt.subplots_adjust(bottom=0.2)
+        ax.plot(np.linspace(0, len(samples) / fs, num=len(samples)), samples)
+        ax.set_title("Select start and end points")
+        ax.set_xlabel("Time (seconds)")
+        ax.set_ylabel("Amplitude")
 
-    start_point, end_point = None, None
-    selecting = "Start"
-    current_playback = None
+        self.start_button = self._create_button([0.1, 0.05, 0.1, 0.04], "Start", "yellow", self._select_start)
+        self.end_button = self._create_button([0.21, 0.05, 0.1, 0.04], "End", "lightgray", self._select_end)
+        self.save_button = self._create_button([0.8, 0.05, 0.1, 0.04], "Save Audio", "lightgoldenrodyellow", self._save_audio)
 
-    def onclick(event):
-        nonlocal start_point, end_point, current_playback
-        if "Start" in selecting:
-            start_point = event.xdata
-            print(f"Start point: {start_point}, End point: {end_point}")
-            segment_to_play = audio[int(start_point * 1000) : int(start_point * 1000) + 2000]
-            current_playback = play_audio_segment(segment_to_play)
+        cid = fig.canvas.mpl_connect("button_press_event", self._onclick)
+        plt.show()
+
+    # Private helper methods
+    def _extract_audio_from_wav(self):
+        return AudioSegment.from_wav(self.input_audio_path)
+
+    def _play_audio_segment(self, segment):
+        samples = np.array(segment.get_array_of_samples())
+        return sa.play_buffer(samples, 1, 2, segment.frame_rate)
+
+    def _stop_audio_playback(self):
+        if self.current_playback:
+            self.current_playback.stop()
+
+    def _get_audio_segment_to_play(self, point):
+        if self.selecting_start:
+            return self.audio[int(point * 1000): int(point * 1000) + 2000]
         else:
-            end_point = event.xdata
-            print(f"Start point: {start_point}, End point: {end_point}")
-            segment_to_play = audio[int(end_point * 1000) - 2000 : int(end_point * 1000)]
-            current_playback = play_audio_segment(segment_to_play)
+            return self.audio[int(point * 1000) - 2000: int(point * 1000)]
 
-    def toggle_selection(label):
-        nonlocal selecting
-        if label == "Start":
-            selecting = "Start"
-            start_button.color = "yellow"
-            end_button.color = "lightgray"
-        else:
-            selecting = "End"
-            end_button.color = "yellow"
-            start_button.color = "lightgray"
-        stop_audio_playback(current_playback)
+    def _onclick(self, event):
+        if event.inaxes in [self.start_button.ax, self.end_button.ax, self.save_button.ax]:
+            return
 
-    def save_audio(event):
-        nonlocal start_point, end_point
-        print(f"Saving audio from {start_point} to {end_point}")
-        trimmed_audio = audio[int(start_point * 1000) : int(end_point * 1000)]
+        idx = 0 if self.selecting_start else 1
+        self.points[idx] = event.xdata
+
+        segment_to_play = self._get_audio_segment_to_play(self.points[idx])
+        self.current_playback = self._play_audio_segment(segment_to_play)
+        print(f"Start point: {self.points[0]}, End point: {self.points[1]}")
+
+    def _select_start(self, event):
+        self.selecting_start = True
+        self._update_button_colors()
+        self._stop_audio_playback()
+
+    def _select_end(self, event):
+        self.selecting_start = False
+        self._update_button_colors()
+        self._stop_audio_playback()
+
+    def _update_button_colors(self):
+        colors = ["yellow", "lightgray"] if self.selecting_start else ["lightgray", "yellow"]
+        self.start_button.color = colors[0]
+        self.end_button.color = colors[1]
+
+    def _save_audio(self, event):
+        final_audio_path = os.path.join(self.output_dir, "dst.wav")
+        trimmed_audio = self.audio[int(self.points[0] * 1000): int(self.points[1] * 1000)]
         trimmed_audio.export(final_audio_path, format="wav")
         print(f"Saved selected audio to {final_audio_path}")
         plt.close()
 
-    save_button_ax = plt.axes([0.8, 0.05, 0.1, 0.04])
-    save_button = Button(save_button_ax, "Save Audio", color="lightgoldenrodyellow", hovercolor="0.975")
-    save_button.on_clicked(save_audio)
-
-    start_button_ax = plt.axes([0.1, 0.05, 0.1, 0.04])
-    start_button = Button(start_button_ax, "Start", color="yellow")
-    start_button.on_clicked(toggle_selection)
-
-    end_button_ax = plt.axes([0.21, 0.05, 0.1, 0.04])
-    end_button = Button(end_button_ax, "End", color="lightgray")
-    end_button.on_clicked(toggle_selection)
-
-    cid = fig.canvas.mpl_connect("button_press_event", onclick)
-    plt.show()
+    def _create_button(self, ax_position, label, color, callback):
+        ax = plt.axes(ax_position)
+        button = Button(ax, label, color=color)
+        button.on_clicked(callback)
+        return button
