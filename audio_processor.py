@@ -18,7 +18,7 @@ class AudioProcessor:
         self.current_end_mode = self.end_modes[0]
         self.current_mode = "start"
         self.points = [None, None]
-        self.duration_ms = 2000
+        self.preview_ms = 2000
         self.margin_sec = 0.5
 
     # Public methods
@@ -66,9 +66,9 @@ class AudioProcessor:
     def _get_audio_segment_to_play(self, point):
         point_in_ms = int(point * 1000)
         if self.current_mode == "start":
-            return self.audio[point_in_ms : min(len(self.audio), point_in_ms + self.duration_ms)]
+            return self.audio[point_in_ms : min(len(self.audio), point_in_ms + self.preview_ms)]
         elif self.current_mode == "end":
-            return self.audio[max(0, point_in_ms - self.duration_ms) : point_in_ms]
+            return self.audio[max(0, point_in_ms - self.preview_ms) : point_in_ms]
 
     def _onclick(self, event):
         if event.inaxes in [self.start_button.ax, self.end_button.ax, self.save_button.ax] or \
@@ -91,7 +91,7 @@ class AudioProcessor:
         max_idx = start_idx + np.argmax(np.abs(samples[start_idx:end_idx]))
         self.points[0] = max_idx / fs + self.margin_sec
 
-        offset = self.duration_ms / 1000 / 2 + self.margin_sec
+        offset = self.preview_ms / 1000 / 2 + self.margin_sec
         segment_to_play = self._get_audio_segment_to_play(self.points[0] - offset)
         self.current_playback = self._play_audio_segment(segment_to_play)
         print(f"Start point: {self.points[0]}, End point: {self.points[1]}")
@@ -139,7 +139,13 @@ class AudioProcessor:
 
     def _save_audio(self, event):
         if self.current_end_mode == "20sec" and self.points[0] is not None:
-            self.points[1] = self.points[0] + 20
+            desired_end_point = self.points[0] + 20
+            if desired_end_point * 1000 > len(self.audio):
+                print(f"Cannot extract 20 sec from the selected start point. "
+                      f"Only {len(self.audio) / 1000 - self.points[0]:.2f} sec remains.")
+                return
+            else:
+                self.points[1] = desired_end_point
         trimmed_audio = self.audio[int(self.points[0] * 1000): int(self.points[1] * 1000)]
         trimmed_audio.export(self.final_audio_path, format="wav")
         print(f"Saved selected audio to {self.final_audio_path}")
