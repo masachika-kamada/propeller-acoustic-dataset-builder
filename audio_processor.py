@@ -8,6 +8,29 @@ from matplotlib.widgets import Button, SpanSelector
 from pydub import AudioSegment
 
 
+"""
+キリのいいところで値を丸めて波形の上限と下限を決めようとしたが、
+pltのスケールからはみ出しているのではなく音割れしていたことが原因で
+はみ出しているように見えただけだったので、この関数は使わないことにした
+"""
+# def rounded_bounds(value):
+#     factor = -1 if value < 0 else 1
+#     abs_value = abs(value)
+
+#     increased_value = abs_value * 1.1
+#     order = int(np.log10(abs_value))
+#     order_magnitude = 10 ** (order - 1)
+#     candidates = [5 * order_magnitude, 2 * order_magnitude, order_magnitude, 0.5 * order_magnitude]
+
+#     for scale in candidates:
+#         mod = increased_value % scale
+#         rounded = increased_value - mod
+#         if rounded >= abs_value:
+#             return int(rounded) * factor
+
+#     return int(abs_value * 1.05) * factor
+
+
 class AudioProcessor:
     def __init__(self, input_audio_path, output_dir):
         self.input_audio_path = input_audio_path
@@ -39,6 +62,11 @@ class AudioProcessor:
         self.ax = ax  # Store ax for later use with SpanSelector
         plt.subplots_adjust(bottom=0.2)
         ax.plot(np.linspace(0, len(samples) / fs, num=len(samples)), samples)
+
+        # y_max = rounded_bounds(max(samples))
+        # y_min = rounded_bounds(min(samples))
+        # ax.set_ylim([y_min, y_max])
+
         ax.set_title(os.path.basename(self.input_audio_path))
         ax.set_xlabel("Time (seconds)")
         ax.set_ylabel("Amplitude")
