@@ -9,7 +9,7 @@ import simpleaudio as sa
 class AudioProcessor:
     def __init__(self, input_audio_path, output_dir):
         self.input_audio_path = input_audio_path
-        self.final_audio_path = os.path.join(output_dir, "dst.wav")
+        self.output_audio_path = os.path.join(output_dir, "dst.wav")
         self.audio = self._extract_audio_from_wav().split_to_mono()[0]
         self.current_playback = None
         self.start_modes = ["impulse", "manual"]
@@ -28,6 +28,8 @@ class AudioProcessor:
         return None
 
     def process(self):
+        os.makedirs(os.path.dirname(self.output_audio_path), exist_ok=True)
+
         samples = np.array(self.audio.get_array_of_samples())
         fs = self.audio.frame_rate
 
@@ -147,8 +149,8 @@ class AudioProcessor:
             else:
                 self.points[1] = desired_end_point
         trimmed_audio = self.audio[int(self.points[0] * 1000): int(self.points[1] * 1000)]
-        trimmed_audio.export(self.final_audio_path, format="wav")
-        print(f"Saved selected audio to {self.final_audio_path}")
+        trimmed_audio.export(self.output_audio_path, format="wav")
+        print(f"Saved selected audio to {self.output_audio_path}")
         plt.close()
 
     def _create_button(self, ax_position, label, color, callback):

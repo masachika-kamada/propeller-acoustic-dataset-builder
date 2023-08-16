@@ -2,77 +2,96 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.widgets import SpanSelector
+from matplotlib.widgets import Button, SpanSelector
 from pydub import AudioSegment
+import simpleaudio as sa
 
 
-def extract_audio_from_mov(file_path):
-    return AudioSegment.from_file(file_path)
+class VideoProcessor:
+    def __init__(self, input_video_path, output_dir, duration_sec=20):
+        self.input_video_path = input_video_path
+        self.output_video_path = os.path.join(output_dir, "video_for_ocr.mp4")
+        self.audio = self._extract_audio_from_video()
+        self.samples = np.array(self.audio.get_array_of_samples())
+        if self.audio.channels == 2:
+            self.samples = self._convert_stereo_to_mono(self.samples)
+        self.start_point = None
+        self.duration_sec = duration_sec
+        self.preview_ms = 2000
+        self.margin_sec = 0.5
 
+    def process(self):
+        os.makedirs(os.path.dirname(self.output_video_path), exist_ok=True)
 
-def convert_stereo_to_mono(samples):
-    return samples[::2] + samples[1::2]
+        fs = self.audio.frame_rate
+        duration = len(self.samples) / fs
+        fig, ax = plt.subplots(figsize=(14, 6))
+        plt.subplots_adjust(bottom=0.2)
+        ax.plot(np.linspace(0, duration, num=len(self.samples)), self.samples)
+        ax.set_title(os.path.basename(self.input_video_path))
+        ax.set_xlabel("Time (seconds)")
+        ax.set_ylabel("Amplitude")
 
+        self.span = SpanSelector(ax, self._onselect, "horizontal", useblit=True)
+        self.save_button = self._create_button([0.8, 0.05, 0.1, 0.04], "Save Video", "yellow", self._save_video)
+        plt.show()
 
-def trim_video(file_path, start_time_sec, end_time_sec, output_path):
-    cap = cv2.VideoCapture(file_path)
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    def _extract_audio_from_video(self):
+        return AudioSegment.from_file(self.input_video_path)
 
-    cap.set(cv2.CAP_PROP_POS_MSEC, start_time_sec * 1000)
+    def _convert_stereo_to_mono(self, samples):
+        # return samples[::2] + samples[1::2]
+        return (samples[::2] + samples[1::2]) // 2
 
-    while cap.get(cv2.CAP_PROP_POS_MSEC) < end_time_sec * 1000:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        out.write(frame)
+    def _play_audio_segment(self, segment):
+        samples = np.array(segment.get_array_of_samples())
+        return sa.play_buffer(samples, 1, 2, segment.frame_rate)
 
-    cap.release()
-    out.release()
+    def _get_audio_segment_to_play(self, point):
+        point_in_ms = int(point * 1000)
+        preview_start = max(0, point_in_ms - self.preview_ms / 2)
+        preview_end = min(len(self.audio), point_in_ms + self.preview_ms / 2)
+        return self.audio[preview_start : preview_end]
 
+    def _onselect(self, xmin, xmax):
+        start_idx = int(xmin * self.audio.frame_rate)
+        end_idx = int(xmax * self.audio.frame_rate)
+        max_idx = start_idx + np.argmax(np.abs(self.samples[start_idx:end_idx]))
+        self.start_point = max_idx / self.audio.frame_rate + self.margin_sec
 
-def process_video(input_video_path, output_dir):
-    output_video_path = os.path.join(output_dir, "video_for_ocr.mp4")
-    output_audio_path = os.path.join(output_dir, "video_impulse_check.wav")
+        segment_to_play = self._get_audio_segment_to_play(max_idx / self.audio.frame_rate)
+        self.current_playback = self._play_audio_segment(segment_to_play)
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    def _trim_video(self, start_time_sec, end_time_sec):
+        cap = cv2.VideoCapture(self.input_video_path)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        out = cv2.VideoWriter(self.output_video_path, fourcc, fps, (width, height))
 
-    audio = extract_audio_from_mov(input_video_path)
-    samples = np.array(audio.get_array_of_samples())
-    if audio.channels == 2:
-        samples = convert_stereo_to_mono(samples)
+        cap.set(cv2.CAP_PROP_POS_MSEC, start_time_sec * 1000)
 
-    fs = audio.frame_rate
-    duration = len(samples) / fs
-    fig, ax = plt.subplots(figsize=(15, 5))
-    ax.plot(np.linspace(0, duration, num=len(samples)), samples)
-    ax.set_title("Audio Waveform")
-    ax.set_xlabel("Time (seconds)")
-    ax.set_ylabel("Amplitude")
+        while cap.get(cv2.CAP_PROP_POS_MSEC) < end_time_sec * 1000:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            out.write(frame)
 
-    def onselect(xmin, xmax):
-        start_idx = int(xmin * fs)
-        end_idx = int(xmax * fs)
-        max_idx = start_idx + np.argmax(np.abs(samples[start_idx:end_idx]))
+        cap.release()
+        out.release()
 
-        # Save audio signal for verification
-        start_audio_time_sec = max_idx / fs - 1.5
-        end_audio_time_sec = max_idx / fs + 1.5
-        trimmed_audio = audio[start_audio_time_sec * 1000 : end_audio_time_sec * 1000]
-        trimmed_audio.export(output_audio_path, format="wav")
+    def _save_video(self, event):
+        if self.start_point is not None:
+            print(f"Saving video to {self.output_video_path}")
+            self._trim_video(self.start_point, self.start_point + self.duration_sec)
+            print(f"Saved video to {self.output_video_path}")
+            plt.close()
+        else:
+            print("Please select a range first.")
 
-        # Extract video
-        start_video_time_sec = max_idx / fs + 0.5
-        end_video_time_sec = start_video_time_sec + 20
-        trim_video(input_video_path, start_video_time_sec, end_video_time_sec, output_video_path)
-
-        print(f"Saved audio to {output_audio_path}")
-        print(f"Saved video to {output_video_path}")
-        plt.close()
-
-    span = SpanSelector(ax, onselect, "horizontal", useblit=True)
-    plt.show()
+    def _create_button(self, ax_position, label, color, callback):
+        ax = plt.axes(ax_position)
+        button = Button(ax, label, color=color)
+        button.on_clicked(callback)
+        return button
