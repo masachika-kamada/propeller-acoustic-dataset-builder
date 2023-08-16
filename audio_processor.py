@@ -1,9 +1,10 @@
 import os
-import numpy as np
+
 import matplotlib.pyplot as plt
-from pydub import AudioSegment
-from matplotlib.widgets import Button, SpanSelector
+import numpy as np
 import simpleaudio as sa
+from matplotlib.widgets import Button, SpanSelector
+from pydub import AudioSegment
 
 
 class AudioProcessor:

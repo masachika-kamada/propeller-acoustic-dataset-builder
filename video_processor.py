@@ -1,10 +1,11 @@
 import os
+
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import simpleaudio as sa
 from matplotlib.widgets import Button, SpanSelector
 from pydub import AudioSegment
-import simpleaudio as sa
 
 
 class VideoProcessor:
