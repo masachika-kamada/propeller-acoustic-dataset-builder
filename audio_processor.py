@@ -19,7 +19,7 @@ class AudioProcessor:
         self.current_end_mode = self.end_modes[0]
         self.current_mode = "start"
         self.points = [None, None]
-        self.preview_ms = 2000
+        self.preview_ms = 500
         self.margin_sec = 0.5
 
     # Public methods
@@ -95,7 +95,7 @@ class AudioProcessor:
         self.points[0] = max_idx / fs + self.margin_sec
 
         offset = self.preview_ms / 1000 / 2 + self.margin_sec
-        segment_to_play = self._get_audio_segment_to_play(self.points[0] - offset)
+        segment_to_play = self._get_audio_segment_to_play(max(0, self.points[0] - offset))
         self.current_playback = self._play_audio_segment(segment_to_play)
         print(f"Start point: {self.points[0]}, End point: {self.points[1]}")
         self._update_button_colors()

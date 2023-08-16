@@ -1,4 +1,5 @@
 import os
+import glob
 
 from audio_processor import AudioProcessor
 from video_processor import VideoProcessor
@@ -27,8 +28,7 @@ def get_video_and_audio_paths(input_dir):
     return video_path, audio_path
 
 
-def main():
-    input_dir = "data/raw/propeller/p2000_2"
+def process_directory(input_dir):
     output_dir = input_dir.replace("raw", "processed")
     input_video_path, input_audio_path = get_video_and_audio_paths(input_dir)
 
@@ -38,6 +38,15 @@ def main():
 
     video_processor = VideoProcessor(input_video_path, output_dir, audio_length)
     video_processor.process()
+
+
+def main():
+    base_dir = "data/raw/propeller"
+    directories = sorted(glob.glob(f"{base_dir}/*"))
+
+    for directory in directories:
+        print(directory)
+        process_directory(directory)
 
 
 if __name__ == "__main__":

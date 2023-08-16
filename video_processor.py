@@ -18,7 +18,7 @@ class VideoProcessor:
             self.samples = self._convert_stereo_to_mono(self.samples)
         self.start_point = None
         self.duration_sec = duration_sec
-        self.preview_ms = 2000
+        self.preview_ms = 500
         self.margin_sec = 0.5
 
     def process(self):
