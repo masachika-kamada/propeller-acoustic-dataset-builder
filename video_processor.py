@@ -1,4 +1,5 @@
 import os
+import sys
 
 import cv2
 import matplotlib.pyplot as plt
@@ -35,6 +36,7 @@ class VideoProcessor:
 
         self.span = SpanSelector(ax, self._onselect, "horizontal", useblit=True)
         self.save_button = self._create_button([0.8, 0.05, 0.1, 0.04], "Save Video", "yellow", self._save_video)
+        fig.canvas.mpl_connect("key_press_event", self._on_key_press)
         plt.show()
 
     def _extract_audio_from_video(self):
@@ -90,6 +92,12 @@ class VideoProcessor:
             plt.close()
         else:
             print("Please select a range first.")
+
+    def _on_key_press(self, event):
+        if event.key == "escape":
+            print("Stopping the processing...")
+            plt.close()
+            sys.exit()
 
     def _create_button(self, ax_position, label, color, callback):
         ax = plt.axes(ax_position)

@@ -1,4 +1,5 @@
 import os
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,7 +52,8 @@ class AudioProcessor:
         if self.current_start_mode == "impulse":
             self.span = SpanSelector(self.ax, self._onselect, "horizontal", useblit=True)
 
-        _ = fig.canvas.mpl_connect("button_press_event", self._onclick)
+        fig.canvas.mpl_connect("button_press_event", self._onclick)
+        fig.canvas.mpl_connect("key_press_event", self._on_key_press)
         plt.show()
 
     # Private helper methods
@@ -153,6 +155,12 @@ class AudioProcessor:
         trimmed_audio.export(self.output_audio_path, format="wav")
         print(f"Saved selected audio to {self.output_audio_path}")
         plt.close()
+
+    def _on_key_press(self, event):
+        if event.key == "escape":
+            print("Stopping the processing...")
+            plt.close()
+            sys.exit()
 
     def _create_button(self, ax_position, label, color, callback):
         ax = plt.axes(ax_position)
